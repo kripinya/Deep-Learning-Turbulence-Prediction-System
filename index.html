@@ -86,15 +86,6 @@
   </div>
 
 <script>
-/*
-  Updated client:
-   - Sends feature vector expected by model: lat,lon,hour,dayofyear,TPI,lat_bin,lon_bin
-   - Points to API at host:9090 (change back to 8000 if you run container on :8000)
-   - Builds a simple demo TPI (proxy) from wind_shear * cloud_cover fraction.
-   - Posts a JSON array [ record ] which matches your local API tests earlier.
-*/
-const API_URL = "http://13.201.82.204/predict";
-
 const form = document.getElementById('predict-form');
 const out = document.getElementById('output');
 const err = document.getElementById('err');
@@ -103,71 +94,27 @@ const predBadge = document.getElementById('pred-badge');
 const predConfidence = document.getElementById('pred-confidence');
 const predProb = document.getElementById('pred-prob');
 
-function safeNumber(v){
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-// Small demo TPI proxy: uses wind_shear scaled by cloud cover fraction.
-// Replace this with server-side TPI calculation when available.
-function computeDemoTPI(wind_shear, cloud_cover){
-  if (wind_shear === null) return null;
-  const cc = (cloud_cover === null) ? 0.5 : Math.max(0, Math.min(1, cloud_cover/100));
-  return wind_shear * (1 + 0.5*cc); // simple heuristic
-}
-
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   err.style.display = 'none';
   out.style.display = 'none';
   spinner.style.display = 'inline-block';
 
+  const data = {
+    wind_speed_10m: parseFloat(document.getElementById('wind_speed_10m').value),
+    wind_speed_100m: parseFloat(document.getElementById('wind_speed_100m').value),
+    wind_shear: parseFloat(document.getElementById('wind_shear').value),
+    relative_humidity_2m: parseFloat(document.getElementById('relative_humidity_2m').value),
+    cloud_cover: parseFloat(document.getElementById('cloud_cover').value),
+    surface_pressure: parseFloat(document.getElementById('surface_pressure').value),
+    dewpt_dep: parseFloat(document.getElementById('dewpt_dep').value)
+  };
+
   try {
-    // read inputs
-    const lat = safeNumber(document.getElementById('lat').value);
-    const lon = safeNumber(document.getElementById('lon').value);
-    const wind_speed_10m = safeNumber(document.getElementById('wind_speed_10m').value);
-    const wind_speed_100m = safeNumber(document.getElementById('wind_speed_100m').value);
-    const wind_shear = safeNumber(document.getElementById('wind_shear').value);
-    const relative_humidity_2m = safeNumber(document.getElementById('relative_humidity_2m').value);
-    const cloud_cover = safeNumber(document.getElementById('cloud_cover').value);
-    const surface_pressure = safeNumber(document.getElementById('surface_pressure').value);
-    const dewpt_dep = safeNumber(document.getElementById('dewpt_dep').value);
-
-    // basic validation
-    if (lat === null || lon === null) throw new Error("Please provide numeric latitude and longitude.");
-
-    // time features: use current local time (UTC could be used if desired)
-    const now = new Date();
-    const hour = now.getHours(); // 0-23
-    const startOfYear = new Date(now.getFullYear(), 0, 0);
-    const diff = now - startOfYear;
-    const oneDay = 1000 * 60 * 60 * 24;
-    const dayofyear = Math.floor(diff / oneDay);
-
-    // compute TPI placeholder (temporary). Replace with server-side formula if you have it.
-    const TPI = computeDemoTPI(wind_shear, cloud_cover);
-
-    // lat/lon bins: simple integer truncate (matches training pipeline's lat_bin/lon_bin)
-    const lat_bin = Math.trunc(lat);
-    const lon_bin = Math.trunc(lon);
-
-    // build record in the order/fields expected by your model pipeline
-    const record = {
-      lat: lat,
-      lon: lon,
-      hour: hour,
-      dayofyear: dayofyear,
-      TPI: TPI === null ? 0.0 : TPI,
-      lat_bin: lat_bin,
-      lon_bin: lon_bin
-    };
-
-    // POST JSON array (the service earlier accepted array of records)
-    const resp = await fetch(API_URL, {
+    const resp = await fetch('http://127.0.0.1:8000/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify([ record ])
+      body: JSON.stringify(data)
     });
 
     if (!resp.ok) {
@@ -176,55 +123,24 @@ form.addEventListener('submit', async (ev) => {
     }
 
     const j = await resp.json();
+    // API returns { predictions: [...], confidence: [...] }
+    const pred = Array.isArray(j.predictions) ? j.predictions[0] : j.predictions;
+    const conf = Array.isArray(j.confidence) ? j.confidence[0] : j.confidence;
 
-    // your API returns: { n_rows, results } or earlier tests showed: { results: [...] } OR { predictions, confidence }
-    // handle common variants robustly:
-    let predText = null;
-    let confVal = null;
-
-    // 1) If API returns the 'results' array with objects like {pred_text, probs}
-    if (Array.isArray(j.results) && j.results.length > 0 && j.results[0].pred_text !== undefined) {
-      predText = j.results[0].pred_text;
-      if (Array.isArray(j.results[0].probs)) confVal = j.results[0].probs[0] ?? null;
-    }
-    // 2) If API returns predictions/confidence directly as arrays
-    else if (Array.isArray(j.predictions) && j.predictions.length > 0) {
-      predText = j.predictions[0];
-      confVal = Array.isArray(j.confidence) ? j.confidence[0] : j.confidence;
-    }
-    // 3) If API returns simpler form
-    else if (j.pred && j.confidence) {
-      predText = j.pred;
-      confVal = j.confidence;
-    }
-    // 4) fallback: see if 'n_rows' + 'results' exists
-    else if (j.n_rows && Array.isArray(j.results) && j.results.length>0) {
-      const r = j.results[0];
-      predText = r.pred_text || r.pred || (r.pred_label === 0 ? "Low" : (r.pred_label===1 ? "Moderate" : "Severe"));
-      confVal = (r.probs && r.probs[0]) || r.confidence || null;
-    }
-
-    if (!predText) {
-      // if nothing matched, just show the raw response
-      predText = JSON.stringify(j).slice(0,200);
-      confVal = null;
-    }
-
-    predBadge.textContent = predText;
-    predBadge.className = 'badge ' + (predText.toLowerCase() === 'severe' ? 'severe' : (predText.toLowerCase() === 'moderate' ? 'moderate' : 'low'));
-    predConfidence.textContent = confVal !== null ? `Confidence: ${(confVal*100).toFixed(1)}%` : '';
-    predProb.textContent = confVal !== null ? `Raw score: ${confVal.toFixed(3)}` : '';
+    // style and text
+    predBadge.textContent = pred;
+    predBadge.className = 'badge ' + (pred.toLowerCase() === 'severe' ? 'severe' : (pred.toLowerCase() === 'moderate' ? 'moderate' : 'low'));
+    predConfidence.textContent = `Confidence: ${(conf * 100).toFixed(1)}%`;
+    predProb.textContent = `Raw score: ${conf.toFixed(3)}`;
 
     out.style.display = 'block';
   } catch (e) {
-    err.textContent = e.message || String(e);
+    err.textContent = e.message;
     err.style.display = 'block';
   } finally {
     spinner.style.display = 'none';
   }
 });
 </script>
-
-\
-aws s3 ls s3://turbulence-model-artifacts-ananya-ap-south-1/model_artifacts/</body>
+</body>
 </html>
