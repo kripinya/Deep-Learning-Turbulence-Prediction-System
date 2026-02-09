@@ -6,6 +6,21 @@ from typing import List, Dict
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 
+# --- Py3.14 Compatibility Patch ---
+import pkgutil
+import importlib.util
+import sys
+
+if not hasattr(pkgutil, 'get_loader'):
+    def get_loader(name):
+        try:
+            spec = importlib.util.find_spec(name)
+            return spec.loader if spec else None
+        except (ImportError, AttributeError, ValueError):
+            return None
+    pkgutil.get_loader = get_loader
+# ----------------------------------
+
 import joblib
 import pandas as pd
 import numpy as np

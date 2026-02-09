@@ -40,3 +40,17 @@ curl -X POST http://localhost:8080/predict \
   -H "Content-Type: application/json" \
   -d '{"rows": [{"temperature_2m": 25, "dewpoint_2m": 20, "surface_pressure": 1013, "wind_speed_10m": 5, "wind_speed_100m": 12, "relative_humidity_2m": 70, "cloud_cover": 50, "lat": 28.6, "lon": 77.2}]}'
 ```
+
+## 🔧 Troubleshooting
+
+**Error: `AttributeError: module 'pkgutil' has no attribute 'get_loader'`**
+- This is caused by a local file named `pkgutil.py` shadowing the standard library.
+- **Fix**: Delete the local file: `rm pkgutil.py`.
+
+**Error: `curl: (7) Failed to connect to localhost`**
+- The server is not running or hasn't started yet.
+- **Fix**: Ensure `python3 api/app.py` is running in a separate terminal and wait for the "Running on..." message.
+
+**Error: `ModuleNotFoundError: No module named 'pkg_resources'`**
+- This can happen with `gunicorn`. 
+- **Fix**: Try running with `gunicorn` installed in the current environment or fallback to `python3 api/app.py` for development.
