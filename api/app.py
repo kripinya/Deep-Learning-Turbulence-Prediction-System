@@ -12,6 +12,7 @@ import numpy as np
 
 # --- config (update if you prefer S3) ---
 MODEL_PATH = os.getenv("MODEL_PATH", "model_artifacts/model_rf_pipeline.joblib")
+SCALER_PATH = os.getenv("SCALER_PATH", "model_artifacts/scaler.joblib")
 PORT = int(os.getenv("PORT", 8080))
 
 # Logging
@@ -31,9 +32,16 @@ def load_model(path: str):
 
 try:
     MODEL = load_model(MODEL_PATH)
+    if os.path.exists(SCALER_PATH):
+        logger.info(f"Loading scaler from {SCALER_PATH}")
+        SCALER = joblib.load(SCALER_PATH)
+    else:
+        logger.warning(f"Scaler not found at {SCALER_PATH}")
+        SCALER = None
 except Exception as e:
-    logger.exception("Failed to load model on startup")
+    logger.exception("Failed to load model or scaler on startup")
     MODEL = None
+    SCALER = None
 
 # Helpful label map - change if your labels differ
 LABEL_MAP = {0: "Low", 1: "Moderate", 2: "Severe"}
@@ -142,10 +150,21 @@ def predict():
         X_for_pred = df.select_dtypes(include=[np.number])
         logger.info(f"No feature_names_in_ found on MODEL; using numeric columns: {X_for_pred.columns.tolist()}")
 
+    # Apply scaling if available
+    if SCALER:
+        try:
+            logger.info("Applying feature scaling")
+            X_for_pred_scaled = SCALER.transform(X_for_pred)
+        except Exception as e:
+            logger.warning(f"Scaling failed: {e}. Proceeding without scaling.")
+            X_for_pred_scaled = X_for_pred
+    else:
+        X_for_pred_scaled = X_for_pred
+
     # Attempt prediction
     try:
-        preds = MODEL.predict(X_for_pred)
-        probs = MODEL.predict_proba(X_for_pred) if hasattr(MODEL, "predict_proba") else None
+        preds = MODEL.predict(X_for_pred_scaled)
+        probs = MODEL.predict_proba(X_for_pred_scaled) if hasattr(MODEL, "predict_proba") else None
     except Exception as e:
         logger.exception("Primary prediction attempt failed")
         return jsonify({"error": f"Prediction failed: {e}"}), 500
