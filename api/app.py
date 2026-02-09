@@ -43,6 +43,9 @@ except Exception as e:
     MODEL = None
     SCALER = None
 
+# Features exptected by the model
+EXPECTED_FEATURES = ["wind_speed_10m", "wind_speed_100m", "wind_shear", "relative_humidity_2m", "cloud_cover", "surface_pressure", "dewpt_dep"]
+
 # Helpful label map - change if your labels differ
 LABEL_MAP = {0: "Low", 1: "Moderate", 2: "Severe"}
 
@@ -116,6 +119,15 @@ def predict():
     # Auto-create lat_bin/lon_bin if missing
     df = ensure_bins(df)
 
+    # --- Feature Engineering ---
+    # Calculate derived features if missing
+    if 'wind_shear' not in df.columns and 'wind_speed_100m' in df.columns and 'wind_speed_10m' in df.columns:
+        df['wind_shear'] = (df['wind_speed_100m'] - df['wind_speed_10m']).abs()
+    
+    if 'dewpt_dep' not in df.columns and 'temperature_2m' in df.columns and 'dewpoint_2m' in df.columns:
+        df['dewpt_dep'] = df['temperature_2m'] - df['dewpoint_2m']
+    # ---------------------------
+
     # Try to obtain the trained feature order (feature_names_in_)
     feature_names = None
     try:
@@ -146,9 +158,13 @@ def predict():
                 df[col] = pd.NA
         X_for_pred = df[feature_names].copy()
     else:
-        # best-effort: use numeric-only columns (existing behavior)
-        X_for_pred = df.select_dtypes(include=[np.number])
-        logger.info(f"No feature_names_in_ found on MODEL; using numeric columns: {X_for_pred.columns.tolist()}")
+        # Fallback: use hardcoded expected features
+        logger.info(f"No feature_names_in_ found on MODEL; using hardcoded list: {EXPECTED_FEATURES}")
+        # Ensure all columns exist
+        for col in EXPECTED_FEATURES:
+            if col not in df.columns:
+                df[col] = 0.0 # Fill missing with 0 or suitable default
+        X_for_pred = df[EXPECTED_FEATURES].copy()
 
     # Apply scaling if available
     if SCALER:
@@ -171,9 +187,20 @@ def predict():
 
     out = []
     for i, p in enumerate(preds):
-        rec = {"index": original_index[i], "pred_label": int(p), "pred_text": LABEL_MAP.get(int(p), str(p))}
+        # Handle string or int predictions
+        if isinstance(p, (int, np.integer, float, np.floating)):
+            pred_label = int(p)
+            pred_text = LABEL_MAP.get(pred_label, str(pred_label))
+        else:
+            pred_label = str(p)
+            pred_text = pred_label
+
+        rec = {"index": original_index[i], "pred_label": pred_label, "pred_text": pred_text}
         if probs is not None:
             rec["probs"] = [float(x) for x in probs[i]]
         out.append(rec)
 
     return jsonify({"n_rows": len(out), "results": out}), 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=PORT, debug=True)
