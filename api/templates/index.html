@@ -373,7 +373,30 @@
                         const pred = result.results[0];
                         content.innerHTML = `<div class="risk-val" style="color:var(--risk-${pred.pred_text.toLowerCase()})">${pred.pred_text}</div>`;
                     } else if (formId === 'batch-form') {
-                        content.innerHTML = `Success! Processed ${result.results.length} records.`;
+                        const rs = result.risk_summary;
+                        let summaryHtml = `
+                            <div style="width:100%; margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.05); border-radius:10px;">
+                                <div style="font-family:'Orbitron'; font-size:0.9rem; margin-bottom:10px; color:var(--accent-primary)">BATCH RISK PROFILE</div>
+                                <div style="display:flex; gap:10px; height:20px; border-radius:10px; overflow:hidden; margin-bottom:10px;">
+                                    <div style="width:${rs.Low}%; background:var(--risk-low)" title="Low: ${rs.Low}%"></div>
+                                    <div style="width:${rs.Moderate}%; background:var(--risk-moderate)" title="Moderate: ${rs.Moderate}%"></div>
+                                    <div style="width:${rs.Severe}%; background:var(--risk-severe)" title="Severe: ${rs.Severe}%"></div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.75rem;">
+                                    <span>Low: ${rs.Low}%</span>
+                                    <span>Mod: ${rs.Moderate}%</span>
+                                    <span>Severe: ${rs.Severe}%</span>
+                                </div>
+                            </div>
+                        `;
+                        let previewHtml = result.results.map(r => `[Row ${r.index}: ${r.pred_text}]`).join(' ');
+                        content.innerHTML = `
+                            Processed ${result.total_records} records.<br>
+                            ${summaryHtml}
+                            <div style="font-size:0.7rem; color:var(--text-dim); text-align:left; max-height:100px; overflow-y:auto; background:#000; padding:10px; border-radius:8px;">
+                                ${previewHtml}...
+                            </div>
+                        `;
                     } else if (formId === 'raw-form') {
                         const rs = result.risk_summary;
                         let summaryHtml = `

@@ -101,6 +101,20 @@ def df_from_request(req) -> pd.DataFrame:
         return pd.DataFrame([d])
     raise ValueError("Unsupported input. Send JSON array or upload a CSV file (field 'file').")
 
+def calculate_risk_summary(predictions: List[Dict]) -> Dict:
+    """Helper to calculate percentage distribution of risk levels."""
+    total = len(predictions)
+    counts = {"Low": 0, "Moderate": 0, "Severe": 0}
+    for p in predictions:
+        label = p.get("pred_text")
+        if label in counts:
+            counts[label] += 1
+    
+    return {
+        label: round((count / total) * 100, 1) if total > 0 else 0
+        for label, count in counts.items()
+    }
+
 def ensure_bins(df: pd.DataFrame) -> pd.DataFrame:
     """
     If model expects lat_bin/lon_bin but they are missing, infer from lat/lon.
@@ -126,7 +140,7 @@ def health():
 
 @app.route("/predict-batch", methods=["POST"])
 def predict_batch():
-    """Endpoint for uploading a CSV and getting batch predictions."""
+    """Endpoint for uploading a CSV and getting batch predictions with summary."""
     if MODEL is None:
         return jsonify({"error": "Model not loaded"}), 500
     try:
@@ -134,9 +148,18 @@ def predict_batch():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     
-    # Simple prediction wrapper
-    results_json, status = predict_internal(df)
-    return results_json, status
+    results, status = predict_internal(df)
+    if status != 200:
+        return results, status
+    
+    predictions = results.get_json()["results"]
+    summary = calculate_risk_summary(predictions)
+
+    return jsonify({
+        "total_records": len(predictions),
+        "risk_summary": summary,
+        "results": predictions[:100] # return first 100 for preview
+    }), 200
 
 def predict_internal(df: pd.DataFrame):
     """Refactored core prediction logic for reuse."""
@@ -234,24 +257,13 @@ def process_h5():
             predictions = pred_json.get_json()["results"]
 
             # Calculate Aggregate Risk Summary
-            total_rows = len(predictions)
-            severity_counts = {"Low": 0, "Moderate": 0, "Severe": 0}
-            for p in predictions:
-                label = p.get("pred_text")
-                if label in severity_counts:
-                    severity_counts[label] += 1
-            
-            # Convert counts to percentages for the "average/aggregate" view
-            risk_summary = {
-                label: round((count / total_rows) * 100, 1) if total_rows > 0 else 0
-                for label, count in severity_counts.items()
-            }
+            risk_summary = calculate_risk_summary(predictions)
 
             csv_buf = io.StringIO()
             df.to_csv(csv_buf, index=False)
             return jsonify({
                 "message": "H5 processed and analyzed (Global Summary)",
-                "rows": total_rows,
+                "rows": len(predictions),
                 "risk_summary": risk_summary,
                 "predictions_preview": predictions[:10], # Keep a small preview
                 "csv_preview": csv_buf.getvalue()[:2000]
