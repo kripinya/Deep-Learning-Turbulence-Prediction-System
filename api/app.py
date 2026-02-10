@@ -26,7 +26,7 @@ import pandas as pd
 import numpy as np
 
 # --- config (update if you prefer S3) ---
-MODEL_PATH = os.getenv("MODEL_PATH", "model_artifacts/model_rf_pipeline.joblib")
+MODEL_PATH = os.getenv("MODEL_PATH", "model_artifacts/rf_model.joblib")
 SCALER_PATH = os.getenv("SCALER_PATH", "model_artifacts/scaler.joblib")
 PORT = int(os.getenv("PORT", 8080))
 

@@ -18,4 +18,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Run Gunicorn with 2 workers
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8080", "app:app", "--timeout", "120"]
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8080", "api.app:app", "--timeout", "120"]

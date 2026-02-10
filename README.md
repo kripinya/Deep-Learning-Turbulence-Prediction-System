@@ -24,7 +24,7 @@ This will save `rf_model.joblib` and `scaler.joblib` to `model_artifacts/`.
 ### 3. Running the Inference API
 ```bash
 # Set model path (if different from default)
-export MODEL_PATH="model_artifacts/model_rf_pipeline.joblib"
+export MODEL_PATH="model_artifacts/rf_model.joblib"
 export SCALER_PATH="model_artifacts/scaler.joblib"
 
 # Start the server (Dev)
