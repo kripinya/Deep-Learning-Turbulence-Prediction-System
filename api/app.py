@@ -21,9 +21,17 @@ if not hasattr(pkgutil, 'get_loader'):
     pkgutil.get_loader = get_loader
 # ----------------------------------
 
+from flask import render_template
+
 import joblib
 import pandas as pd
 import numpy as np
+import h5py
+from datetime import datetime, timedelta
+try:
+    from api.mosdac_client import MosdacClient
+except ImportError:
+    from mosdac_client import MosdacClient
 
 # --- config (update if you prefer S3) ---
 MODEL_PATH = os.getenv("MODEL_PATH", "model_artifacts/rf_model.joblib")
@@ -107,10 +115,186 @@ def ensure_bins(df: pd.DataFrame) -> pd.DataFrame:
         df['lon_bin'] = df['lon'].apply(lambda x: int(x) if pd.notna(x) else pd.NA)
     return df
 
+@app.route("/", methods=["GET"])
+def index():
+    return render_template("index.html")
+
 @app.route("/health", methods=["GET"])
 def health():
     ok = MODEL is not None
-    return jsonify({"status":"ok" if ok else "model_missing", "model_path": MODEL_PATH}), (200 if ok else 500)
+    return jsonify({"status":"ok" if ok else "model_missing", "model_path": MODEL_PATH, "scaler_loaded": SCALER is not None}), (200 if ok else 500)
+
+@app.route("/predict-batch", methods=["POST"])
+def predict_batch():
+    """Endpoint for uploading a CSV and getting batch predictions."""
+    if MODEL is None:
+        return jsonify({"error": "Model not loaded"}), 500
+    try:
+        df = df_from_request(request)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    
+    # Simple prediction wrapper
+    results_json, status = predict_internal(df)
+    return results_json, status
+
+def predict_internal(df: pd.DataFrame):
+    """Refactored core prediction logic for reuse."""
+    # Convert numeric-like columns to numeric
+    for c in df.columns:
+        try:
+            df[c] = pd.to_numeric(df[c], errors='coerce')
+        except Exception: pass
+
+    df = ensure_bins(df)
+    
+    # Feature Engineering
+    if 'wind_shear' not in df.columns and 'wind_speed_100m' in df.columns and 'wind_speed_10m' in df.columns:
+        df['wind_shear'] = (df['wind_speed_100m'] - df['wind_speed_10m']).abs()
+    if 'dewpt_dep' not in df.columns and 'temperature_2m' in df.columns and 'dewpoint_2m' in df.columns:
+        df['dewpt_dep'] = df['temperature_2m'] - df['dewpoint_2m']
+
+    # Get feature order
+    feature_names = None
+    if hasattr(MODEL, "feature_names_in_"):
+        feature_names = list(MODEL.feature_names_in_)
+    
+    # Ensure all required columns exist in the dataframe before slicing
+    target_cols = feature_names if feature_names else EXPECTED_FEATURES
+    for col in target_cols:
+        if col not in df.columns:
+            df[col] = 0.0
+
+    X_for_pred = df[target_cols].copy()
+
+    X_for_pred_scaled = SCALER.transform(X_for_pred) if SCALER else X_for_pred
+
+    try:
+        preds = MODEL.predict(X_for_pred_scaled)
+        probs = MODEL.predict_proba(X_for_pred_scaled) if hasattr(MODEL, "predict_proba") else None
+    except Exception as e:
+        return jsonify({"error": f"Prediction failed: {e}"}), 500
+
+    out = []
+    for i, p in enumerate(preds):
+        # If prediction is already a string (like 'Moderate'), use it directly
+        if isinstance(p, (str, np.str_)):
+            label = str(p)
+        else:
+            try:
+                label = LABEL_MAP.get(int(p), str(p))
+            except (ValueError, TypeError):
+                label = str(p)
+        
+        rec = {"index": i, "pred_text": label}
+        if probs is not None:
+            rec["probs"] = [float(x) for x in probs[i]]
+        out.append(rec)
+
+    return jsonify({"results": out}), 200
+
+@app.route("/process-h5", methods=["POST"])
+def process_h5():
+    """Convert uploaded HDF5 to processed CSV format."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    
+    f = request.files['file']
+    filename = secure_filename(f.filename)
+    # Save temporarily
+    tmp_path = os.path.join("/tmp", filename)
+    f.save(tmp_path)
+
+    try:
+        with h5py.File(tmp_path, "r") as h5:
+            lat_ds = h5.get("Latitude") or h5.get("CSBT_Latitude")
+            lon_ds = h5.get("Longitude") or h5.get("CSBT_Longitude")
+            if lat_ds is None:
+                return jsonify({"error": "No geospatial data found in H5"}), 400
+            
+            lat = np.array(lat_ds).ravel()
+            lon = np.array(lon_ds).ravel()
+            ctp = h5.get("CTP")
+            ctt = h5.get("CTT")
+
+            # Simple masking for demo (using logic from process_mosdac_perfile.py)
+            mask = (lat != 32767)
+            df = pd.DataFrame({
+                "lat": lat[mask],
+                "lon": lon[mask],
+                "CTP": np.array(ctp).ravel()[mask] if ctp else np.nan,
+                "CTT": np.array(ctt).ravel()[mask] if ctt else np.nan
+            })
+            
+            # Prediction Integration
+            pred_df = df.copy()
+            pred_df['cloud_cover'] = pred_df['CTP'].fillna(0) / 10 # dummy mapping
+            pred_df['surface_pressure'] = 1013 # default
+            pred_json, status = predict_internal(pred_df)
+            predictions = pred_json.get_json()["results"]
+
+            # Calculate Aggregate Risk Summary
+            total_rows = len(predictions)
+            severity_counts = {"Low": 0, "Moderate": 0, "Severe": 0}
+            for p in predictions:
+                label = p.get("pred_text")
+                if label in severity_counts:
+                    severity_counts[label] += 1
+            
+            # Convert counts to percentages for the "average/aggregate" view
+            risk_summary = {
+                label: round((count / total_rows) * 100, 1) if total_rows > 0 else 0
+                for label, count in severity_counts.items()
+            }
+
+            csv_buf = io.StringIO()
+            df.to_csv(csv_buf, index=False)
+            return jsonify({
+                "message": "H5 processed and analyzed (Global Summary)",
+                "rows": total_rows,
+                "risk_summary": risk_summary,
+                "predictions_preview": predictions[:10], # Keep a small preview
+                "csv_preview": csv_buf.getvalue()[:2000]
+            })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+@app.route("/mosdac-ingest", methods=["POST"])
+def mosdac_ingest():
+    """Live MOSDAC ingestion trigger."""
+    data = request.get_json() or {}
+    client = MosdacClient(data.get("username"), data.get("password"))
+    
+    lat = data.get("lat", 28.6)
+    lon = data.get("lon", 77.2)
+    dataset = data.get("dataset", "3D_IMG_L2B_CTP")
+
+    logger.info(f"Triggering MOSDAC ingestion for {dataset} at {lat}, {lon}")
+    result = client.get_realtime_data(dataset, lat, lon)
+    
+    if "error" in result:
+        return jsonify(result), 401
+    
+    # Calculate prediction for the LATEST point in the stream
+    latest_point = result["stream"][-1]
+    mock_row = pd.DataFrame([{
+        "lat": lat, "lon": lon,
+        "temperature_2m": 25, "dewpoint_2m": 20, # defaults
+        "surface_pressure": 1013, 
+        "wind_speed_10m": 5, "wind_speed_100m": 12,
+        "relative_humidity_2m": 70, 
+        "cloud_cover": latest_point["CTP"] / 10 # Map CTP to cloud cover
+    }])
+    pred_res, status = predict_internal(mock_row)
+    
+    return jsonify({
+        "mosdac_status": "Live Streaming Active",
+        "ingestion_info": result,
+        "current_prediction": pred_res.get_json()["results"][0]
+    }), status
 
 @app.route("/predict", methods=["POST"])
 def predict():

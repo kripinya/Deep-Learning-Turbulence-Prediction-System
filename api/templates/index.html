@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turbulence Insight - Advanced Dashboard</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Orbitron:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0a0e14;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --accent-primary: #00f2ff;
+            --accent-secondary: #7000ff;
+            --text-main: #e0e0e0;
+            --text-dim: #a0a0a0;
+            --risk-low: #00ff88;
+            --risk-moderate: #ffbb00;
+            --risk-severe: #ff3355;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            background: radial-gradient(circle at 50% 50%, #1a1f2b 0%, #0a0e14 100%);
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            padding: 40px 20px;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.2rem;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        /* Tabs Styling */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            padding: 12px 20px;
+            border-radius: 12px;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: rgba(0, 242, 255, 0.1);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+        }
+
+        .tab-content {
+            display: none;
+            width: 100%;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 12px;
+            color: white;
+            font-family: inherit;
+        }
+
+        .btn-action {
+            width: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            border: none;
+            border-radius: 12px;
+            padding: 15px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-action:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        /* Unified Result View */
+        .result-view {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+
+        .risk-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            margin: 15px 0;
+        }
+
+        .loading {
+            display: none;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        pre.preview {
+            background: #000;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            color: #00ff00;
+            text-align: left;
+            overflow-x: auto;
+            max-height: 300px;
+            width: 100%;
+            border: 1px solid #333;
+        }
+
+        @media (max-width: 850px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>TURBULENCE INSIGHT</h1>
+            <p style="color: var(--text-dim)">Advanced Aviation Intelligence System</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('instant')">INSTANT PREDICT</button>
+            <button class="tab-btn" onclick="showTab('batch')">BATCH CSV</button>
+            <button class="tab-btn" onclick="showTab('raw')">RAW HDF5</button>
+            <button class="tab-btn" onclick="showTab('live')">LIVE MOSDAC</button>
+        </div>
+
+        <!-- Tab: Instant Predict -->
+        <div id="instant" class="tab-content active">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Single Point Analysis</h2>
+                    <form id="instant-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group"><label>Lat</label><input type="number" step="any" name="lat"
+                                    value="28.6"></div>
+                            <div class="form-group"><label>Lon</label><input type="number" step="any" name="lon"
+                                    value="77.2"></div>
+                            <div class="form-group"><label>Temp °C</label><input type="number" step="any"
+                                    name="temperature_2m" value="25"></div>
+                            <div class="form-group"><label>Wind 100m</label><input type="number" step="any"
+                                    name="wind_speed_100m" value="12"></div>
+                        </div>
+                        <div class="form-group"><label>Pressure (hPa)</label><input type="number" step="any"
+                                name="surface_pressure" value="1013"></div>
+                        <button type="submit" class="btn-action">ANALYZE NOW</button>
+                    </form>
+                </div>
+                <div class="card result-view" id="instant-res">
+                    <div class="loading"></div>
+                    <div class="content">Enter data to see prediction</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Batch CSV -->
+        <div id="batch" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>CSV Batch Upload</h2>
+                    <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:15px;">Upload a CSV with
+                        atmospheric features to get multiple predictions at once.</p>
+                    <form id="batch-form">
+                        <input type="file" name="file" accept=".csv" required style="margin-bottom:15px;">
+                        <button type="submit" class="btn-action">PROCESS BATCH</button>
+                    </form>
+                </div>
+                <div class="card result-view" id="batch-res">
+                    <div class="loading"></div>
+                    <div class="content">Results will appear here</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Raw HDF5 -->
+        <div id="raw" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Raw MOSDAC (HDF5)</h2>
+                    <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:15px;">Upload a .h5 satellite file
+                        to convert it into a cleaned, flattened CSV.</p>
+                    <form id="raw-form">
+                        <input type="file" name="file" accept=".h5" required style="margin-bottom:15px;">
+                        <button type="submit" class="btn-action">CONVERT TO CSV</button>
+                    </form>
+                </div>
+                <div class="card result-view" id="raw-res">
+                    <div class="loading"></div>
+                    <div class="content">CSV Preview will appear here</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Live MOSDAC -->
+        <div id="live" class="tab-content">
+            <div class="card" style="max-width:600px; margin: 0 auto;">
+                <h2>Real-time MOSDAC Ingestion</h2>
+                <form id="live-form">
+                    <div class="form-group"><label>MOSDAC Username</label><input type="text" name="username"
+                            placeholder="Required for real-time access"></div>
+                    <div class="form-group"><label>MOSDAC Password</label><input type="password" name="password"></div>
+                    <div class="form-group">
+                        <label>Dataset ID</label>
+                        <select name="dataset">
+                            <option value="3D_IMG_L2B_CTP">INSAT-3D Imager L2B (Cloud Top)</option>
+                            <option value="3R_IMG_L2B_CTP">INSAT-3DR Imager L2B</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-action">CONNECT & STREAM</button>
+                </form>
+                <div id="live-res" style="margin-top:20px; text-align:center;">
+                    <div class="loading" style="margin: 0 auto;"></div>
+                    <div class="content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function handleForm(formId, resId, endpoint, isJson = true) {
+            const form = document.getElementById(formId);
+            const res = document.getElementById(resId);
+            const loading = res.querySelector('.loading');
+            const content = res.querySelector('.content');
+
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                loading.style.display = 'block';
+                content.innerHTML = '';
+
+                let body, headers = {};
+                if (isJson) {
+                    const data = {};
+                    new FormData(form).forEach((v, k) => data[k] = v);
+                    body = JSON.stringify({ rows: [data] });
+                    if (formId === 'live-form') body = JSON.stringify(data);
+                    headers['Content-Type'] = 'application/json';
+                } else {
+                    body = new FormData(form);
+                }
+
+                try {
+                    const response = await fetch(endpoint, { method: 'POST', headers, body });
+                    const result = await response.json();
+                    loading.style.display = 'none';
+
+                    if (formId === 'instant-form') {
+                        const pred = result.results[0];
+                        content.innerHTML = `<div class="risk-val" style="color:var(--risk-${pred.pred_text.toLowerCase()})">${pred.pred_text}</div>`;
+                    } else if (formId === 'batch-form') {
+                        content.innerHTML = `Success! Processed ${result.results.length} records.`;
+                    } else if (formId === 'raw-form') {
+                        const rs = result.risk_summary;
+                        let summaryHtml = `
+                            <div style="width:100%; margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.05); border-radius:10px;">
+                                <div style="font-family:'Orbitron'; font-size:0.9rem; margin-bottom:10px; color:var(--accent-primary)">GLOBAL RISK PROFILE</div>
+                                <div style="display:flex; gap:10px; height:20px; border-radius:10px; overflow:hidden; margin-bottom:10px;">
+                                    <div style="width:${rs.Low}%; background:var(--risk-low)" title="Low: ${rs.Low}%"></div>
+                                    <div style="width:${rs.Moderate}%; background:var(--risk-moderate)" title="Moderate: ${rs.Moderate}%"></div>
+                                    <div style="width:${rs.Severe}%; background:var(--risk-severe)" title="Severe: ${rs.Severe}%"></div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.75rem;">
+                                    <span>Low: ${rs.Low}%</span>
+                                    <span>Mod: ${rs.Moderate}%</span>
+                                    <span>Severe: ${rs.Severe}%</span>
+                                </div>
+                            </div>
+                        `;
+                        content.innerHTML = `
+                            Total Rows: ${result.rows}<br>
+                            ${summaryHtml}
+                            <pre class="preview">${result.csv_preview}...</pre>
+                        `;
+                    } else if (formId === 'live-form') {
+                        const info = result.ingestion_info;
+                        const pred = result.current_prediction;
+                        
+                        let feedHtml = info.stream.map(s => `
+                            <div style="font-size:0.7rem; color:var(--text-dim); border-bottom:1px solid rgba(255,255,255,0.05); padding:5px 0;">
+                                [${s.timestamp.split('T')[1].substring(0,5)}] CTP: ${s.CTP.toFixed(1)} | CTT: ${s.CTT.toFixed(1)} 
+                                <span style="color:var(--accent-primary); float:right;">${s.status}</span>
+                            </div>
+                        `).join('');
+
+                        let forecastHtml = info.forecast_24h.map(f => `
+                            <div style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; text-align:center;">
+                                <div style="font-size:0.7rem; color:var(--accent-primary)">${f.hour}</div>
+                                <div style="font-weight:600; font-size:0.8rem; color:var(--risk-${f.risk.toLowerCase()})">${f.risk}</div>
+                                <div style="font-size:0.6rem; color:var(--text-dim)">${f.trend}</div>
+                            </div>
+                        `).join('');
+
+                        content.innerHTML = `
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; width:100%; margin-top:10px; text-align:left;">
+                                <div>
+                                    <h3 style="font-size:0.8rem; margin-bottom:10px;">🔴 LIVE DATA FEED</h3>
+                                    <div style="background:#000; padding:10px; border-radius:10px; height:150px; overflow-y:auto; border:1px solid #333;">
+                                        ${feedHtml}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 style="font-size:0.8rem; margin-bottom:10px;">🔮 24H FORECAST</h3>
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                        ${forecastHtml}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="margin-top:20px; padding:15px; background:rgba(0,242,255,0.05); border-radius:12px; width:100%;">
+                                <b>Real-time Risk Severity:</b> 
+                                <span style="color:var(--risk-${pred.pred_text.toLowerCase()}); font-family:'Orbitron'; font-size:1.2rem; margin-left:10px;">${pred.pred_text}</span>
+                            </div>
+                        `;
+                    }
+                } catch (err) {
+                    loading.style.display = 'none';
+                    content.innerHTML = `<span style="color:red">Error: ${err.message}</span>`;
+                }
+            };
+        }
+
+        handleForm('instant-form', 'instant-res', '/predict');
+        handleForm('batch-form', 'batch-res', '/predict-batch', false);
+        handleForm('raw-form', 'raw-res', '/process-h5', false);
+        handleForm('live-form', 'live-res', '/mosdac-ingest');
+    </script>
+</body>
+
+</html>

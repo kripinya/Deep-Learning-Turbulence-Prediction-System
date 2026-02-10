@@ -1,0 +1,3 @@
+wind_speed_10m,wind_speed_100m,relative_humidity_2m,cloud_cover,surface_pressure,lat,lon
+5,12,70,50,1013,28.6,77.2
+10,25,40,90,1005,12.9,80.1
