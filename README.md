@@ -1,6 +1,6 @@
 # Deep Learning Turbulence Prediction System
 
-## Overview
+### Overview
 
 This project is an enhanced version of the original Cloud-Based Turbulence Prediction System.  
 The initial version used a Random Forest model on satellite-derived atmospheric parameters.  
@@ -10,7 +10,7 @@ The system aims to predict aviation turbulence severity using satellite data and
 
 ---
 
-## Problem Statement
+### Problem Statement
 
 Clear Air Turbulence (CAT) is difficult to detect using traditional radar systems because it occurs in cloud-free regions.  
 
@@ -18,7 +18,7 @@ This project explores the use of satellite-derived atmospheric parameters and ma
 
 ---
 
-## Objectives
+### Objectives
 
 - Improve turbulence prediction using Deep Learning models
 - Move from heuristic severity classification to physically grounded modeling (e.g., EDR-based thresholds)
@@ -28,7 +28,7 @@ This project explores the use of satellite-derived atmospheric parameters and ma
 
 ---
 
-## System Architecture (Planned V2)
+### System Architecture (Planned V2)
 
 1. Satellite Data Ingestion (INSAT-3D/3DR HDF5)
 2. Data Cleaning and Feature Extraction
@@ -41,7 +41,7 @@ This project explores the use of satellite-derived atmospheric parameters and ma
 
 ---
 
-## Key Enhancements Over V1
+### Key Enhancements Over V1
 
 - Transition from Random Forest to Deep Learning
 - Addition of spatio-temporal modeling
@@ -51,7 +51,7 @@ This project explores the use of satellite-derived atmospheric parameters and ma
 
 ---
 
-## Technologies Used
+### Technologies Used
 
 - Python
 - NumPy, Pandas
@@ -63,7 +63,7 @@ This project explores the use of satellite-derived atmospheric parameters and ma
 
 ---
 
-## Evaluation Strategy
+### Evaluation Strategy
 
 The system will be evaluated using:
 
@@ -77,4 +77,37 @@ Future versions aim to validate predictions against turbulence severity metrics 
 
 ---
 
-## Repository Structure (Planned)
+### Repository Structure (Planned)
+data/
+cleaned/
+models/
+notebooks/
+api/
+stream_simulator/
+docs/
+
+---
+
+### Future Scope
+
+- CNN-LSTM based spatio-temporal modeling
+- Transformer-based experimentation
+- Real-time data streaming integration
+- Automated pipeline orchestration
+- AI-based turbulence advisory generation
+- Integration with aviation weather datasets
+
+---
+
+### Status
+
+This repository represents Version 2 (Research Upgrade Phase).  
+Development is ongoing and focuses on expanding model robustness and automation capabilities.
+
+---
+
+### Author
+
+Ananya Karn(kripinya)
+B.Tech Computer Science  
+Focus Area: Cloud Systems, Machine Learning, Aviation Safety Applications
