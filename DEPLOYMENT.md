@@ -1,8 +1,8 @@
-# Deployment Guide 🚀
+# Deployment Guide
 
 This project is container-ready and can be deployed to any platform effectively.
 
-## 1. Docker Deployment (Local or Server)
+## Docker Deployment (Local or Server)
 
 ### Prerequisites
 - Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
@@ -23,7 +23,7 @@ This project is container-ready and can be deployed to any platform effectively.
 
 ---
 
-## 2. Cloud Deployment (Render.com - Free Tier)
+## Cloud Deployment (Render.com - Free Tier)
 
 Render is the easiest way to deploy this for free.
 
@@ -42,7 +42,7 @@ Render will automatically build using the `Dockerfile` and deploy your API.
 
 ---
 
-## 3. Production Considerations for AWS/GCP
+## Production Considerations for AWS/GCP
 
 If deploying to AWS ECS, Kubernetes, or Google Cloud Run:
 - The container listens on port **8080**.
